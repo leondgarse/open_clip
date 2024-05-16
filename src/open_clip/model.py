@@ -262,8 +262,8 @@ class CLIP(nn.Module):
         self.visual.set_grad_checkpointing(enable)
         self.transformer.grad_checkpointing = enable
 
-    def encode_image(self, image, weather, normalize: bool = False):
-        features = self.visual(image, weather)
+    def encode_image(self, image, normalize: bool = False):
+        features = self.visual(image)
         return F.normalize(features, dim=-1) if normalize else features
 
     def encode_text(self, text, normalize: bool = False):
@@ -286,7 +286,10 @@ class CLIP(nn.Module):
         return F.normalize(x, dim=-1) if normalize else x
 
     def get_logits(self, image, weather, text):
-        image_features = self.encode_image(image, weather, normalize=True)
+        image_features = self.encode_image(image, normalize=True)
+        weather_features = self.encode_text(weather, normalize=True)
+        image_features = image_features + weather_features
+        
         text_features = self.encode_text(text, normalize=True)
         image_logits = self.logit_scale.exp() * image_features @ text_features.T
         if self.logit_bias is not None:
@@ -300,7 +303,9 @@ class CLIP(nn.Module):
             weather: Optional[torch.Tensor] = None,
             text: Optional[torch.Tensor] = None,
     ):
-        image_features = self.encode_image(image, weather, normalize=True) if image is not None else None
+        image_features = self.encode_image(image, normalize=True) if image is not None else None
+        weather_features = self.encode_text(weather, normalize=True) if weather is not None else None
+        image_features = image_features + weather_features
         text_features = self.encode_text(text, normalize=True) if text is not None else None
 
         if self.output_dict:

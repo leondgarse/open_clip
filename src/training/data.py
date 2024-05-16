@@ -45,7 +45,7 @@ class CsvDataset(Dataset):
 
     def __getitem__(self, idx):
         images = self.transforms(Image.open(str(self.images[idx])))
-        weathers = int(self.weathers[idx])
+        weathers = self.tokenize([str(self.weathers[idx])])[0]
         texts = self.tokenize([str(self.captions[idx])])[0]
         return images, weathers, texts
 
