@@ -117,6 +117,9 @@ class ModifiedResNet(nn.Module):
         self.act3 = nn.ReLU(inplace=True)
         self.avgpool = nn.AvgPool2d(2)
 
+        # Weather input encoder
+        self.weather_encoder = nn.Embedding(2, width)
+
         # residual layers
         self._inplanes = width  # this is a *mutable* variable used during construction
         self.layer1 = self._make_layer(width, layers[0])
@@ -170,8 +173,10 @@ class ModifiedResNet(nn.Module):
         x = self.avgpool(x)
         return x
 
-    def forward(self, x):
+    def forward(self, x, weather):
         x = self.stem(x)
+        x = self.weather_encoder(weather) + x
+        
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)

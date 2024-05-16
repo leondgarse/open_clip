@@ -89,8 +89,9 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
         if not args.skip_scheduler:
             scheduler(step)
 
-        images, texts = batch
+        images, weathers, texts = batch
         images = images.to(device=device, dtype=input_dtype, non_blocking=True)
+        weathers = weathers.to(device=device, dtype=input_dtype, non_blocking=True)
         texts = texts.to(device=device, non_blocking=True)
 
         data_time_m.update(time.time() - end)
@@ -98,7 +99,7 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
 
         if args.accum_freq == 1:
             with autocast():
-                model_out = model(images, texts)
+                model_out = model(images, weathers, texts)
                 logit_scale = model_out["logit_scale"]
                 if args.distill:
                     with torch.no_grad():
@@ -206,7 +207,7 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
             logit_scale_scalar = logit_scale.item()
             loss_log = " ".join(
                 [
-                    f"{loss_name.capitalize()}: {loss_m.val:#.5g} ({loss_m.avg:#.5g})" 
+                    f"{loss_name.capitalize()}: {loss_m.val:#.5g} ({loss_m.avg:#.5g})"
                     for loss_name, loss_m in losses_m.items()
                 ]
             )
@@ -228,7 +229,7 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
                 "samples_per_second_per_gpu": samples_per_second_per_gpu,
                 "scale": logit_scale_scalar,
                 "lr": optimizer.param_groups[0]["lr"]
-            }            
+            }
             log_data.update({name:val.val for name,val in losses_m.items()})
 
             log_data = {"train/" + name: val for name, val in log_data.items()}
@@ -236,12 +237,12 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
             if tb_writer is not None:
                 for name, val in log_data.items():
                     tb_writer.add_scalar(name, val, step)
-            
+
             if args.wandb:
                 assert wandb is not None, 'Please install wandb.'
                 log_data['step'] = step  # for backwards compatibility
                 wandb.log(log_data, step=step)
-            
+
             # resetting batch / data time meters per log window
             batch_time_m.reset()
             data_time_m.reset()
@@ -273,12 +274,13 @@ def evaluate(model, data, epoch, args, tb_writer=None, tokenizer=None):
         all_image_features, all_text_features = [], []
         with torch.no_grad():
             for i, batch in enumerate(dataloader):
-                images, texts = batch
+                images, weathers, texts = batch
                 images = images.to(device=device, dtype=input_dtype, non_blocking=True)
+                weathers = weathers.to(device=device, dtype=input_dtype, non_blocking=True)
                 texts = texts.to(device=device, non_blocking=True)
 
                 with autocast():
-                    model_out = model(images, texts)
+                    model_out = model(images, weathers, texts)
                     image_features = model_out["image_features"]
                     text_features = model_out["text_features"]
                     logit_scale = model_out["logit_scale"]
