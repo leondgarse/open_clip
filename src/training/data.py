@@ -464,7 +464,7 @@ def get_csv_dataset(args, preprocess_fn, is_train, epoch=0, tokenizer=None):
     dataloader = DataLoader(
         dataset,
         batch_size=args.batch_size,
-        shuffle=shuffle,
+        shuffle=False,
         num_workers=args.workers,
         pin_memory=True,
         sampler=sampler,
@@ -514,7 +514,7 @@ def get_synthetic_dataset(args, preprocess_fn, is_train, epoch=0, tokenizer=None
     dataloader = DataLoader(
         dataset,
         batch_size=args.batch_size,
-        shuffle=shuffle,
+        shuffle=False,
         num_workers=args.workers,
         pin_memory=True,
         sampler=sampler,

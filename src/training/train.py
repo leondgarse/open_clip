@@ -61,6 +61,14 @@ def backward(total_loss, scaler):
         total_loss.backward()
 
 
+def weather_pairs_loss(image_features, pairs_num=2, loss_weight=64):
+    sunny = image_features[-2 * pairs_num: - pairs_num]
+    foggy = image_features[- pairs_num:]
+    loss = 1 - torch.cosine_similarity(sunny, foggy).mean()
+    # print(">>>> Weather pair loss:", loss)
+    return loss * loss_weight
+
+
 def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist_model, args, tb_writer=None):
     device = torch.device(args.device)
     autocast = get_autocast(args.precision)
@@ -107,8 +115,11 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
                     model_out.update({f'dist_{k}': v for k, v in dist_model_out.items()})
                 losses = loss(**model_out, output_dict=True)
 
+                weather_loss = weather_pairs_loss(model_out["image_features"])
+                total_loss = sum(losses.values()) + weather_loss
                 total_loss = sum(losses.values())
                 losses["loss"] = total_loss
+                losses["weather_loss"] = weather_loss
 
             backward(total_loss, scaler)
         else:
@@ -157,8 +168,12 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
                     losses = loss(**inputs, **inputs_no_accum, output_dict=True)
                     del inputs
                     del inputs_no_accum
+
+                    weather_loss = weather_pairs_loss(inputs["image_features"])
+                    total_loss = sum(losses.values()) + weather_loss
                     total_loss = sum(losses.values())
                     losses["loss"] = total_loss
+                    losses["weather_loss"] = weather_loss
 
                 backward(total_loss, scaler)
 
