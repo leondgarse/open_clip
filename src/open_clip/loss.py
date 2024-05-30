@@ -86,9 +86,13 @@ class ClipLoss(nn.Module):
         self.prev_num_logits = 0
         self.labels = {}
 
-    def get_ground_truth(self, device, num_logits) -> torch.Tensor:
+    def get_ground_truth(self, device, num_logits, texts=None) -> torch.Tensor:
         # calculated ground-truth and cache if enabled
-        if self.prev_num_logits != num_logits or device not in self.labels:
+        if texts is not None:
+            texts_expanded = torch.repeat_interleave(texts[:, None], texts.shape[0], dim=1)
+            labels = (texts_expanded == texts_expanded.permute([1, 0, 2])).sum(-1) == texts_expanded.shape[-1]
+            labels = labels.to(device=device, dtype=torch.float32)
+        elif self.prev_num_logits != num_logits or device not in self.labels:
             labels = torch.arange(num_logits, device=device, dtype=torch.long)
             if self.world_size > 1 and self.local_loss:
                 labels = labels + num_logits * self.rank
@@ -114,14 +118,15 @@ class ClipLoss(nn.Module):
         else:
             logits_per_image = logit_scale * image_features @ text_features.T
             logits_per_text = logit_scale * text_features @ image_features.T
-        
+
         return logits_per_image, logits_per_text
 
-    def forward(self, image_features, text_features, logit_scale, output_dict=False):
+    def forward(self, image_features, text_features, logit_scale, texts=None, output_dict=False):
         device = image_features.device
         logits_per_image, logits_per_text = self.get_logits(image_features, text_features, logit_scale)
 
-        labels = self.get_ground_truth(device, logits_per_image.shape[0])
+        labels = self.get_ground_truth(device, logits_per_image.shape[0], texts=texts)
+        # print("labels = {labels}")
 
         total_loss = (
             F.cross_entropy(logits_per_image, labels) +
@@ -158,9 +163,9 @@ class CoCaLoss(ClipLoss):
         self.caption_loss = nn.CrossEntropyLoss(ignore_index=pad_id)
 
     def forward(self, image_features, text_features, logits, labels, logit_scale, output_dict=False):
-        
+
         clip_loss = torch.tensor(0)
-        
+
         if self.clip_loss_weight:
             clip_loss = super().forward(image_features, text_features, logit_scale)
             clip_loss = self.clip_loss_weight * clip_loss
